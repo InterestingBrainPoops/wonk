@@ -10,9 +10,13 @@ crate-type = ["cdylib"]
 [dependencies]
 buddy-alloc = { version = "0.4.1", optional = true }
 noise = "0.7.0"
+wasm-timer = "0.2.5"
 
+[profile.dev]
+opt-level = "z"
 
 [profile.release]
+debug = true
 opt-level = "z"
 lto = true
 

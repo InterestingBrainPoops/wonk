@@ -4,6 +4,8 @@ mod colors;
 mod controls;
 mod player;
 mod wasm4;
+// use wasm_timer::Instant;
+
 use colors::*;
 use controls::*;
 use noise::{NoiseFn, Perlin, Seedable};
@@ -38,10 +40,31 @@ fn set_draw_color(color: u16) {
         *DRAW_COLORS = color.into();
     }
 }
+
+static mut cpos: (i32, i32) = (0, 0);
+
+fn update_cpos() {
+    unsafe {
+        cpos.0 += 1;
+        if (cpos.0 == SCREEN_SIZE) {
+            cpos.1 += 1;
+            cpos.0 = 0;
+        }
+        if (cpos.1 == SCREEN_SIZE) {
+            cpos.1 = 0;
+        }
+    }
+}
+
+fn get_cpos() -> (i32, i32) {
+    unsafe { cpos.clone() }
+}
+
 #[no_mangle]
 fn update() {
     unsafe { *SYSTEM_FLAGS |= SYSTEM_PRESERVE_FRAMEBUFFER };
     let perlin = Perlin::new().set_seed(0);
+    let perlin_layer_2 = Perlin::new().set_seed(100);
     // for i in (-10..10).map(|x| x as f64 * 0.01) {
     //     trace(format!("{:?}", perlin.get([i, i])));
     // }
@@ -49,26 +72,38 @@ fn update() {
     let mouse = Mouse::new();
     let game_pad = GamePad::new(0);
     let p_mouse = clone_previousMouse();
+    //     let start = Instant::now();
+
     Player::update(&game_pad);
-    for x in (0..160).map(|x_pos| x_pos as f64 * 0.1) {
-        for y in (0..160).map(|y_| y_ as f64 * 0.1) {
-            let perlin_at_point = perlin.get([x + Player::get_x(), y + Player::get_y()]);
-            // trace(format!("{}", perlin_at_point));
-            if (perlin_at_point >= -1.0 && perlin_at_point < -0.5) {
-                set_draw_color(0x1);
-            } else if (perlin_at_point >= -0.5 && perlin_at_point < 0.0) {
-                set_draw_color(0x2);
-            } else if (perlin_at_point >= 0.0 && perlin_at_point < 0.5) {
-                set_draw_color(0x3);
-            } else if (perlin_at_point >= 0.5 && perlin_at_point <= 1.0) {
-                set_draw_color(0x4);
-            } else {
-                panic!("thingthign");
-            }
-            // trace(format!("{}, {}", x * 10.0, y * 10.0));
-            pixel((x * 10.0) as i32, (y * 10.0) as i32);
+    for _ in 0..(160 * 160) {
+        update_cpos();
+        let c_pixel = get_cpos();
+        let x = c_pixel.0;
+        let y = c_pixel.1;
+        let scale = 0.1;
+        let perlin_at_point = perlin.get([
+            x as f64 * scale + Player::get_x(),
+            y as f64 * scale + Player::get_y(),
+            Player::get_z(),
+        ]) + perlin_layer_2.get([
+            x as f64 * scale + Player::get_x(),
+            y as f64 * scale + Player::get_y(),
+            Player::get_z(),
+        ]);
+        // trace(format!("{}", perlin_at_point));
+        if (perlin_at_point < -0.75) {
+            set_draw_color(0x1);
+        } else if (perlin_at_point >= -0.75 && perlin_at_point < 0.0) {
+            set_draw_color(0x2);
+        } else if (perlin_at_point >= 0.0 && perlin_at_point < 0.75) {
+            set_draw_color(0x3);
+        } else if (perlin_at_point >= 0.75) {
+            set_draw_color(0x4);
         }
+        // trace(format!("{}, {}", x * 10.0, y * 10.0));
+        pixel((x) as i32, (y) as i32);
     }
+
     update_previous();
     // blit(&SMILEY, 76, 76, 8, 8, BLIT_1BPP);
     // text("Press X to blink", 16, 90);
